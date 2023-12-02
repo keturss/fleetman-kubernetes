@@ -6,12 +6,14 @@ spec:
   selector:
     app: fleetman-queue
   ports:
-    - protocol: TCP
-      port: 8161
-      targetPort: 8161
-    - protocol: TCP
-      port: 61616
-      targetPort: 61616
+  - name: http
+    protocol: TCP
+    port: 8161
+    targetPort: 8161
+  - name: message
+    protocol: TCP
+    port: 61616
+    targetPort: 61616
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -28,8 +30,13 @@ spec:
         app: fleetman-queue
     spec:
       containers:
-        - name: fleetman-queue
-          image: supinfo4kube/queue:1.0.1
+      - name: fleetman-queue
+        image: supinfo4kube/queue:1.0.0
+        ports:
+        - containerPort: 8161
+        - containerPort: 61616
+
+
 ---
 apiVersion: v1
 kind: Service
@@ -39,9 +46,9 @@ spec:
   selector:
     app: fleetman-position-simulator
   ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 80
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -58,28 +65,15 @@ spec:
         app: fleetman-position-simulator
     spec:
       containers:
-        - name: fleetman-position-simulator
-          image: supinfo4kube/position-simulator:1.0.1
-          env:
-            - name: SPRING_PROFILES_ACTIVE
-              value: production-microservice
-          ports:
-            - containerPort: 80
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 80
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 80
-            initialDelaySeconds: 5
-            periodSeconds: 10
-          volumeMounts:
-            - name: shared-data
-              mountPath: /app/shared
+      - name: fleetman-position-simulator
+        image: supinfo4kube/position-simulator:1.0.0
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production-microservice"
+        ports:
+        - containerPort: 8080
+
+
 ---
 apiVersion: v1
 kind: Service
@@ -89,9 +83,9 @@ spec:
   selector:
     app: fleetman-position-tracker
   ports:
-    - protocol: TCP
-      port: 8080
-      targetPort: 8080
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -108,13 +102,15 @@ spec:
         app: fleetman-position-tracker
     spec:
       containers:
-        - name: fleetman-position-tracker
-          image: supinfo4kube/position-tracker:1.0.1
-          env:
-            - name: SPRING_PROFILES_ACTIVE
-              value: production-microservice
-          ports:
-            - containerPort: 8080
+      - name: fleetman-position-tracker
+        image: supinfo4kube/position-tracker:1.0.0
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production-microservice"
+        ports:
+        - containerPort: 8080
+
+
 ---
 apiVersion: v1
 kind: Service
@@ -124,9 +120,9 @@ spec:
   selector:
     app: fleetman-api-gateway
   ports:
-    - protocol: TCP
-      port: 8080
-      targetPort: 8080
+  - protocol: TCP
+    port: 8080
+    targetPort: 8080
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -143,13 +139,15 @@ spec:
         app: fleetman-api-gateway
     spec:
       containers:
-        - name: fleetman-api-gateway
-          image: supinfo4kube/api-gateway:1.0.1
-          env:
-            - name: SPRING_PROFILES_ACTIVE
-              value: production-microservice
-          ports:
-            - containerPort: 8080
+      - name: fleetman-api-gateway
+        image: supinfo4kube/api-gateway:1.0.0
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production-microservice"
+        ports:
+        - containerPort: 8080
+
+
 ---
 apiVersion: v1
 kind: Service
@@ -159,9 +157,9 @@ spec:
   selector:
     app: fleetman-webapp
   ports:
-    - protocol: TCP
-      port: 80
-      targetPort: 80
+  - protocol: TCP
+    port: 80
+    targetPort: 80
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -178,13 +176,12 @@ spec:
         app: fleetman-webapp
     spec:
       containers:
-        - name: fleetman-webapp
-          image: supinfo4kube/web-app:1.0.0
-          ports:
-            - containerPort: 80
-          volumeMounts:
-            - name: shared-data
-              mountPath: /app/shared
+      - name: fleetman-webapp
+        image: dlcardonag/fleetman-webapp
+        ports:
+        - containerPort: 80
+
+
 ---
 apiVersion: v1
 kind: Service
@@ -194,16 +191,15 @@ spec:
   selector:
     app: fleetman-mongodb
   ports:
-    - protocol: TCP
-      port: 27017
-      targetPort: 27017
+  - protocol: TCP
+    port: 27017
+    targetPort: 27017
 ---
 apiVersion: apps/v1
-kind: StatefulSet
+kind: Deployment
 metadata:
   name: fleetman-mongodb
 spec:
-  serviceName: "fleetman-mongodb"
   replicas: 1
   selector:
     matchLabels:
@@ -214,43 +210,39 @@ spec:
         app: fleetman-mongodb
     spec:
       containers:
-        - name: fleetman-mongodb
-          image: mongo:3.6.23
-          ports:
-            - containerPort: 27017
-          volumeMounts:
-            - name: mongo-data
-              mountPath: /data/db
+      - name: fleetman-mongodb
+        image: mongo:3.6.23
+        ports:
+        - containerPort: 27017
+        volumeMounts:
+        - name: mongo-data
+          mountPath: /data/db
+      volumes:
+      - name: mongo-data
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: mongo-data-pv
+  name: mongo-data
 spec:
   capacity:
     storage: 1Gi
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   hostPath:
-    path: "/path/on/host"
+    path: /path/to/host/mongo-data
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: mongo-data-pvc
+  name: mongo-data
 spec:
   accessModes:
-    - ReadWriteOnce
+  - ReadWriteOnce
   resources:
     requests:
       storage: 1Gi
----
-apiVersion: v1
-kind: Pod
-metadata:
-  name: shared-data-pod
-spec:
-  volumes:
-    - name: shared-data
-      persistentVolumeClaim:
-        claimName: mongo-data-pvc
+  selector:
+    matchLabels:
+      app: fleetman-mongodb
